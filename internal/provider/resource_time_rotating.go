@@ -84,6 +84,14 @@ func (t *timeRotatingResource) Schema(ctx context.Context, req resource.SchemaRe
 				Description: "Number day of timestamp.",
 				Computed:    true,
 			},
+			"week": schema.Int64Attribute{
+				Description: "Number week of timestamp.",
+				Computed:    true,
+			},
+			"week_of_year": schema.Int64Attribute{
+				Description: "Number year (w.r.t week number) of offset timestamp.",
+				Computed:    true,
+			},
 			"rotation_days": schema.Int64Attribute{
 				Description: "Number of days to add to the base timestamp to configure the rotation timestamp. " +
 					"When the current time has passed the rotation timestamp, the resource will trigger recreation. " +
@@ -113,6 +121,15 @@ func (t *timeRotatingResource) Schema(ctx context.Context, req resource.SchemaRe
 			},
 			"rotation_months": schema.Int64Attribute{
 				Description: "Number of months to add to the base timestamp to configure the rotation timestamp. " +
+					"When the current time has passed the rotation timestamp, the resource will trigger recreation. " +
+					"At least one of the 'rotation_' arguments must be configured.",
+				Optional: true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+				},
+			},
+			"rotation_weeks": schema.Int64Attribute{
+				Description: "Number of week to add to the base timestamp to configure the rotation timestamp. " +
 					"When the current time has passed the rotation timestamp, the resource will trigger recreation. " +
 					"At least one of the 'rotation_' arguments must be configured.",
 				Optional: true,
@@ -205,6 +222,7 @@ func (t *timeRotatingResource) ConfigValidators(ctx context.Context) []resource.
 			path.MatchRoot("rotation_minutes"),
 			path.MatchRoot("rotation_hours"),
 			path.MatchRoot("rotation_days"),
+			path.MatchRoot("rotation_weeks"),
 			path.MatchRoot("rotation_months"),
 			path.MatchRoot("rotation_years"),
 			path.MatchRoot("rotation_rfc3339"),
@@ -240,6 +258,7 @@ func (t *timeRotatingResource) ModifyPlan(ctx context.Context, req resource.Modi
 
 	if state.RotationYears == plan.RotationYears &&
 		state.RotationMonths == plan.RotationMonths &&
+		state.RotationWeeks == plan.RotationWeeks &&
 		state.RotationDays == plan.RotationDays &&
 		state.RotationHours == plan.RotationHours &&
 		state.RotationMinutes == plan.RotationMinutes &&
@@ -301,10 +320,11 @@ func (t *timeRotatingResource) ImportState(ctx context.Context, req resource.Imp
 
 	idParts := strings.Split(id, ",")
 
-	if len(idParts) != 2 && len(idParts) != 6 {
+	if len(idParts) != 2 && len(idParts) != 7 {
 		resp.Diagnostics.AddError(
 			"Unexpected Format of ID",
-			fmt.Sprintf("Unexpected format of ID (%q), expected BASETIMESTAMP,YEARS,MONTHS,DAYS,HOURS,MINUTES or BASETIMESTAMP,ROTATIONTIMESTAMP", id))
+			fmt.Sprintf("Unexpected format of ID (%q), "+
+				"expected BASETIMESTAMP,YEARS,MONTHS,WEEKS,DAYS,HOURS,MINUTES or BASETIMESTAMP,ROTATIONTIMESTAMP", id))
 
 		return
 	}
@@ -328,10 +348,18 @@ func (t *timeRotatingResource) ImportState(ctx context.Context, req resource.Imp
 		}
 
 	} else {
-		if idParts[0] == "" || (idParts[1] == "" && idParts[2] == "" && idParts[3] == "" && idParts[4] == "" && idParts[5] == "") {
+		if idParts[0] == "" ||
+			(idParts[1] == "" &&
+				idParts[2] == "" &&
+				idParts[3] == "" &&
+				idParts[4] == "" &&
+				idParts[5] == "" &&
+				idParts[6] == "") {
 			resp.Diagnostics.AddError(
 				"Unexpected Format of ID",
-				fmt.Sprintf("Unexpected format of ID (%q), expected BASETIMESTAMP,YEARS,MONTHS,DAYS,HOURS,MINUTES where at least one rotation value is non-empty", id))
+				fmt.Sprintf("Unexpected format of ID (%q), "+
+					"expected BASETIMESTAMP,YEARS,MONTHS,WEEKS,DAYS,HOURS,MINUTES "+
+					"where at least one rotation value is non-empty", id))
 
 			return
 		}
@@ -430,6 +458,7 @@ func (t *timeRotatingResource) Update(ctx context.Context, req resource.UpdateRe
 
 	if state.RotationYears == plan.RotationYears &&
 		state.RotationMonths == plan.RotationMonths &&
+		state.RotationWeeks == plan.RotationWeeks &&
 		state.RotationDays == plan.RotationDays &&
 		state.RotationHours == plan.RotationHours &&
 		state.RotationMinutes == plan.RotationMinutes &&
@@ -464,6 +493,7 @@ type timeRotatingModelV0 struct {
 	RotationDays    types.Int64       `tfsdk:"rotation_days"`
 	RotationHours   types.Int64       `tfsdk:"rotation_hours"`
 	RotationMinutes types.Int64       `tfsdk:"rotation_minutes"`
+	RotationWeeks   types.Int64       `tfsdk:"rotation_weeks"`
 	RotationMonths  types.Int64       `tfsdk:"rotation_months"`
 	RotationRFC3339 timetypes.RFC3339 `tfsdk:"rotation_rfc3339"`
 	RotationYears   types.Int64       `tfsdk:"rotation_years"`
@@ -471,6 +501,8 @@ type timeRotatingModelV0 struct {
 	Triggers        types.Map         `tfsdk:"triggers"`
 	Minute          types.Int64       `tfsdk:"minute"`
 	Month           types.Int64       `tfsdk:"month"`
+	Week            types.Int64       `tfsdk:"week"`
+	WeekOfYear      types.Int64       `tfsdk:"week_of_year"`
 	RFC3339         timetypes.RFC3339 `tfsdk:"rfc3339"`
 	Second          types.Int64       `tfsdk:"second"`
 	Unix            types.Int64       `tfsdk:"unix"`
@@ -496,6 +528,10 @@ func setRotationValues(plan *timeRotatingModelV0, timestamp time.Time) diag.Diag
 		rotationTimestamp = timestamp.Add(minutes)
 	}
 
+	if plan.RotationWeeks.ValueInt64() != 0 {
+		rotationTimestamp = timestamp.AddDate(0, 0, 7*int(plan.RotationWeeks.ValueInt64()))
+	}
+
 	if plan.RotationMonths.ValueInt64() != 0 {
 		rotationTimestamp = timestamp.AddDate(0, int(plan.RotationMonths.ValueInt64()), 0)
 	}
@@ -508,9 +544,13 @@ func setRotationValues(plan *timeRotatingModelV0, timestamp time.Time) diag.Diag
 		rotationTimestamp = timestamp.AddDate(int(plan.RotationYears.ValueInt64()), 0, 0)
 	}
 
+	weekOfYear, week := rotationTimestamp.ISOWeek()
+
 	plan.RotationRFC3339 = timetypes.NewRFC3339TimeValue(rotationTimestamp)
 	plan.Year = types.Int64Value(int64(rotationTimestamp.Year()))
 	plan.Month = types.Int64Value(int64(rotationTimestamp.Month()))
+	plan.Week = types.Int64Value(int64(week))
+	plan.WeekOfYear = types.Int64Value(int64(weekOfYear))
 	plan.Day = types.Int64Value(int64(rotationTimestamp.Day()))
 	plan.Hour = types.Int64Value(int64(rotationTimestamp.Hour()))
 	plan.Minute = types.Int64Value(int64(rotationTimestamp.Minute()))
@@ -537,9 +577,13 @@ func parseTwoPartId(idParts []string) (timeRotatingModelV0, error) {
 		return timeRotatingModelV0{}, err
 	}
 
+	weekOfYear, week := rotationTimestamp.ISOWeek()
+
 	return timeRotatingModelV0{
 		Year:            types.Int64Value(int64(rotationTimestamp.Year())),
 		Month:           types.Int64Value(int64(rotationTimestamp.Month())),
+		Week:            types.Int64Value(int64(week)),
+		WeekOfYear:      types.Int64Value(int64(weekOfYear)),
 		Day:             types.Int64Value(int64(rotationTimestamp.Day())),
 		Hour:            types.Int64Value(int64(rotationTimestamp.Hour())),
 		Minute:          types.Int64Value(int64(rotationTimestamp.Minute())),
@@ -547,6 +591,7 @@ func parseTwoPartId(idParts []string) (timeRotatingModelV0, error) {
 		RotationRFC3339: timetypes.NewRFC3339TimeValue(rotationTimestamp),
 		RotationYears:   types.Int64Null(),
 		RotationMonths:  types.Int64Null(),
+		RotationWeeks:   types.Int64Null(),
 		RotationDays:    types.Int64Null(),
 		RotationHours:   types.Int64Null(),
 		RotationMinutes: types.Int64Null(),
@@ -569,17 +614,22 @@ func parseMultiplePartId(idParts []string) (timeRotatingModelV0, error) {
 		return timeRotatingModelV0{}, err
 	}
 
-	rotationDays, err := rotationToInt64(idParts[3])
+	rotationWeeks, err := rotationToInt64(idParts[3])
 	if err != nil {
 		return timeRotatingModelV0{}, err
 	}
 
-	rotationHours, err := rotationToInt64(idParts[4])
+	rotationDays, err := rotationToInt64(idParts[4])
 	if err != nil {
 		return timeRotatingModelV0{}, err
 	}
 
-	rotationMinutes, err := rotationToInt64(idParts[5])
+	rotationHours, err := rotationToInt64(idParts[5])
+	if err != nil {
+		return timeRotatingModelV0{}, err
+	}
+
+	rotationMinutes, err := rotationToInt64(idParts[6])
 	if err != nil {
 		return timeRotatingModelV0{}, err
 	}
@@ -605,6 +655,10 @@ func parseMultiplePartId(idParts []string) (timeRotatingModelV0, error) {
 		rotationTimestamp = timestamp.Add(minutes)
 	}
 
+	if !rotationWeeks.IsNull() && rotationWeeks.ValueInt64() > 0 {
+		rotationTimestamp = timestamp.AddDate(0, 0, 7*int(rotationWeeks.ValueInt64()))
+	}
+
 	if !rotationMonths.IsNull() && rotationMonths.ValueInt64() > 0 {
 		rotationTimestamp = timestamp.AddDate(0, int(rotationMonths.ValueInt64()), 0)
 	}
@@ -613,9 +667,13 @@ func parseMultiplePartId(idParts []string) (timeRotatingModelV0, error) {
 		rotationTimestamp = timestamp.AddDate(int(rotationYears.ValueInt64()), 0, 0)
 	}
 
+	weekOfYear, week := rotationTimestamp.ISOWeek()
+
 	state := timeRotatingModelV0{
 		Year:            types.Int64Value(int64(rotationTimestamp.Year())),
 		Month:           types.Int64Value(int64(rotationTimestamp.Month())),
+		Week:            types.Int64Value(int64(week)),
+		WeekOfYear:      types.Int64Value(int64(weekOfYear)),
 		Day:             types.Int64Value(int64(rotationTimestamp.Day())),
 		Hour:            types.Int64Value(int64(rotationTimestamp.Hour())),
 		Minute:          types.Int64Value(int64(rotationTimestamp.Minute())),
@@ -623,6 +681,7 @@ func parseMultiplePartId(idParts []string) (timeRotatingModelV0, error) {
 		RotationRFC3339: timetypes.NewRFC3339TimeValue(rotationTimestamp),
 		RotationYears:   rotationYears,
 		RotationMonths:  rotationMonths,
+		RotationWeeks:   rotationWeeks,
 		RotationDays:    rotationDays,
 		RotationHours:   rotationHours,
 		RotationMinutes: rotationMinutes,

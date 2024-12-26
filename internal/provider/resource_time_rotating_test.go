@@ -21,6 +21,8 @@ import (
 	"github.com/hashicorp/terraform-provider-time/internal/timetesting"
 )
 
+// TODO :: Bhargav :: Add tests for week, week_of_year and rotation_weeks related changes
+
 func TestAccTimeRotating_Triggers(t *testing.T) {
 	t.Parallel()
 	resourceName := "time_rotating.test"
@@ -1394,12 +1396,26 @@ func testAccTimeRotatingImportStateIdFunc() resource.ImportStateIdFunc {
 
 		rotationYears := rs.Primary.Attributes["rotation_years"]
 		rotationMonths := rs.Primary.Attributes["rotation_months"]
+		rotationWeeks := rs.Primary.Attributes["rotation_weeks"]
 		rotationDays := rs.Primary.Attributes["rotation_days"]
 		rotationHours := rs.Primary.Attributes["rotation_hours"]
 		rotationMinutes := rs.Primary.Attributes["rotation_minutes"]
 
-		if rotationYears != "" || rotationMonths != "" || rotationDays != "" || rotationHours != "" || rotationMinutes != "" {
-			return fmt.Sprintf("%s,%s,%s,%s,%s,%s", rs.Primary.ID, rotationYears, rotationMonths, rotationDays, rotationHours, rotationMinutes), nil
+		if rotationYears != "" ||
+			rotationMonths != "" ||
+			rotationWeeks != "" ||
+			rotationDays != "" ||
+			rotationHours != "" ||
+			rotationMinutes != "" {
+			return fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s",
+				rs.Primary.ID,
+				rotationYears,
+				rotationMonths,
+				rotationWeeks,
+				rotationDays,
+				rotationHours,
+				rotationMinutes,
+			), nil
 		}
 
 		return fmt.Sprintf("%s,%s", rs.Primary.ID, rs.Primary.Attributes["rotation_rfc3339"]), nil

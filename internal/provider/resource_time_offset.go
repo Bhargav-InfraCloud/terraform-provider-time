@@ -100,28 +100,40 @@ func (t *timeOffsetResource) Schema(ctx context.Context, req resource.SchemaRequ
 				Description: "Number minute of offset timestamp.",
 				Computed:    true,
 			},
+			"week": schema.Int64Attribute{
+				Description: "Number week of offset timestamp.",
+				Computed:    true,
+			},
+			"week_of_year": schema.Int64Attribute{
+				Description: "Number year (w.r.t week number) of offset timestamp.",
+				Computed:    true,
+			},
 			"month": schema.Int64Attribute{
 				Description: "Number month of offset timestamp.",
 				Computed:    true,
 			},
-			"offset_days": schema.Int64Attribute{
-				Description: "Number of days to offset the base timestamp. At least one of the 'offset_' arguments must be configured.",
-				Optional:    true,
-			},
-			"offset_hours": schema.Int64Attribute{
-				Description: " Number of hours to offset the base timestamp. At least one of the 'offset_' arguments must be configured.",
+			"offset_seconds": schema.Int64Attribute{
+				Description: "Number of seconds to offset the base timestamp. At least one of the 'offset_' arguments must be configured.",
 				Optional:    true,
 			},
 			"offset_minutes": schema.Int64Attribute{
 				Description: "Number of minutes to offset the base timestamp. At least one of the 'offset_' arguments must be configured.",
 				Optional:    true,
 			},
-			"offset_months": schema.Int64Attribute{
-				Description: "Number of months to offset the base timestamp. At least one of the 'offset_' arguments must be configured.",
+			"offset_hours": schema.Int64Attribute{
+				Description: " Number of hours to offset the base timestamp. At least one of the 'offset_' arguments must be configured.",
 				Optional:    true,
 			},
-			"offset_seconds": schema.Int64Attribute{
-				Description: "Number of seconds to offset the base timestamp. At least one of the 'offset_' arguments must be configured.",
+			"offset_days": schema.Int64Attribute{
+				Description: "Number of days to offset the base timestamp. At least one of the 'offset_' arguments must be configured.",
+				Optional:    true,
+			},
+			"offset_weeks": schema.Int64Attribute{
+				Description: "Number of weeks to offset the base timestamp. At least one of the 'offset_' arguments must be configured.",
+				Optional:    true,
+			},
+			"offset_months": schema.Int64Attribute{
+				Description: "Number of months to offset the base timestamp. At least one of the 'offset_' arguments must be configured.",
 				Optional:    true,
 			},
 			"offset_years": schema.Int64Attribute{
@@ -161,6 +173,7 @@ func (t *timeOffsetResource) ConfigValidators(_ context.Context) []resource.Conf
 			path.MatchRoot("offset_minutes"),
 			path.MatchRoot("offset_hours"),
 			path.MatchRoot("offset_days"),
+			path.MatchRoot("offset_weeks"),
 			path.MatchRoot("offset_months"),
 			path.MatchRoot("offset_years"),
 		),
@@ -193,12 +206,13 @@ func (t *timeOffsetResource) ModifyPlan(ctx context.Context, req resource.Modify
 		return
 	}
 
-	if state.OffsetYears == plan.OffsetYears &&
-		state.OffsetMonths == plan.OffsetMonths &&
-		state.OffsetDays == plan.OffsetDays &&
-		state.OffsetHours == plan.OffsetHours &&
+	if state.OffsetSeconds == plan.OffsetSeconds &&
 		state.OffsetMinutes == plan.OffsetMinutes &&
-		state.OffsetSeconds == plan.OffsetSeconds {
+		state.OffsetHours == plan.OffsetHours &&
+		state.OffsetDays == plan.OffsetDays &&
+		state.OffsetWeeks == plan.OffsetWeeks &&
+		state.OffsetMonths == plan.OffsetMonths &&
+		state.OffsetYears == plan.OffsetYears {
 		return
 	}
 
@@ -243,18 +257,32 @@ func (t *timeOffsetResource) ImportState(ctx context.Context, req resource.Impor
 
 	idParts := strings.Split(id, ",")
 
-	if len(idParts) != 7 {
+	if len(idParts) != 8 {
 		resp.Diagnostics.AddError(
 			"Unexpected Format of ID",
-			fmt.Sprintf("Unexpected format of ID (%q), expected BASETIMESTAMP,YEARS,MONTHS,DAYS,HOURS,MINUTES,SECONDS", id))
+			fmt.Sprintf("Unexpected format of ID (%q), "+
+				"expected BASETIMESTAMP,YEARS,MONTHS,WEEKS,DAYS,HOURS,MINUTES,SECONDS", id,
+			),
+		)
 
 		return
 	}
 
-	if idParts[0] == "" || (idParts[1] == "" && idParts[2] == "" && idParts[3] == "" && idParts[4] == "" && idParts[5] == "" && idParts[6] == "") {
+	if idParts[0] == "" ||
+		(idParts[1] == "" &&
+			idParts[2] == "" &&
+			idParts[3] == "" &&
+			idParts[4] == "" &&
+			idParts[5] == "" &&
+			idParts[6] == "" &&
+			idParts[7] == "") {
 		resp.Diagnostics.AddError(
 			"Unexpected Format of ID",
-			fmt.Sprintf("Unexpected format of ID (%q), expected BASETIMESTAMP,YEARS,MONTHS,DAYS,HOURS,MINUTES,SECONDS where at least one offset value is non-empty", id))
+			fmt.Sprintf("Unexpected format of ID (%q), "+
+				"expected BASETIMESTAMP,YEARS,MONTHS,WEEKS,DAYS,HOURS,MINUTES,SECONDS "+
+				"where at least one offset value is non-empty", id,
+			),
+		)
 
 		return
 	}
@@ -281,7 +309,17 @@ func (t *timeOffsetResource) ImportState(ctx context.Context, req resource.Impor
 		return
 	}
 
-	importedState.OffsetDays, err = offsetToInt64(idParts[3])
+	importedState.OffsetWeeks, err = offsetToInt64(idParts[3])
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Import time offset error",
+			"The offset_weeks parameter that was supplied could not be parsed as Int64.\n\n+"+
+				fmt.Sprintf("Original Error: %s", err),
+		)
+		return
+	}
+
+	importedState.OffsetDays, err = offsetToInt64(idParts[4])
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import time offset error",
@@ -291,7 +329,7 @@ func (t *timeOffsetResource) ImportState(ctx context.Context, req resource.Impor
 		return
 	}
 
-	importedState.OffsetHours, err = offsetToInt64(idParts[4])
+	importedState.OffsetHours, err = offsetToInt64(idParts[5])
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import time offset error",
@@ -301,7 +339,7 @@ func (t *timeOffsetResource) ImportState(ctx context.Context, req resource.Impor
 		return
 	}
 
-	importedState.OffsetMinutes, err = offsetToInt64(idParts[5])
+	importedState.OffsetMinutes, err = offsetToInt64(idParts[6])
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import time offset error",
@@ -311,7 +349,7 @@ func (t *timeOffsetResource) ImportState(ctx context.Context, req resource.Impor
 		return
 	}
 
-	importedState.OffsetSeconds, err = offsetToInt64(idParts[6])
+	importedState.OffsetSeconds, err = offsetToInt64(idParts[7])
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import time offset error",
@@ -401,16 +439,19 @@ type timeOffsetModelV0 struct {
 	Triggers      types.Map         `tfsdk:"triggers"`
 	Year          types.Int64       `tfsdk:"year"`
 	Month         types.Int64       `tfsdk:"month"`
+	Week          types.Int64       `tfsdk:"week"`
+	WeekOfYear    types.Int64       `tfsdk:"week_of_year"`
 	Day           types.Int64       `tfsdk:"day"`
 	Hour          types.Int64       `tfsdk:"hour"`
 	Minute        types.Int64       `tfsdk:"minute"`
 	Second        types.Int64       `tfsdk:"second"`
-	OffsetYears   types.Int64       `tfsdk:"offset_years"`
-	OffsetMonths  types.Int64       `tfsdk:"offset_months"`
-	OffsetDays    types.Int64       `tfsdk:"offset_days"`
-	OffsetHours   types.Int64       `tfsdk:"offset_hours"`
-	OffsetMinutes types.Int64       `tfsdk:"offset_minutes"`
 	OffsetSeconds types.Int64       `tfsdk:"offset_seconds"`
+	OffsetMinutes types.Int64       `tfsdk:"offset_minutes"`
+	OffsetHours   types.Int64       `tfsdk:"offset_hours"`
+	OffsetDays    types.Int64       `tfsdk:"offset_days"`
+	OffsetWeeks   types.Int64       `tfsdk:"offset_weeks"`
+	OffsetMonths  types.Int64       `tfsdk:"offset_months"`
+	OffsetYears   types.Int64       `tfsdk:"offset_years"`
 	RFC3339       timetypes.RFC3339 `tfsdk:"rfc3339"`
 	Unix          types.Int64       `tfsdk:"unix"`
 	ID            timetypes.RFC3339 `tfsdk:"id"`
@@ -419,13 +460,9 @@ type timeOffsetModelV0 struct {
 func setOffsetValues(plan *timeOffsetModelV0, timestamp time.Time) {
 	var offsetTimestamp = timestamp
 
-	if plan.OffsetDays.ValueInt64() != 0 {
-		offsetTimestamp = offsetTimestamp.AddDate(0, 0, int(plan.OffsetDays.ValueInt64()))
-	}
-
-	if plan.OffsetHours.ValueInt64() != 0 {
-		hours := time.Duration(plan.OffsetHours.ValueInt64()) * time.Hour
-		offsetTimestamp = offsetTimestamp.Add(hours)
+	if plan.OffsetSeconds.ValueInt64() != 0 {
+		seconds := time.Duration(plan.OffsetSeconds.ValueInt64()) * time.Second
+		offsetTimestamp = offsetTimestamp.Add(seconds)
 	}
 
 	if plan.OffsetMinutes.ValueInt64() != 0 {
@@ -433,22 +470,34 @@ func setOffsetValues(plan *timeOffsetModelV0, timestamp time.Time) {
 		offsetTimestamp = offsetTimestamp.Add(minutes)
 	}
 
-	if plan.OffsetMonths.ValueInt64() != 0 {
-		offsetTimestamp = offsetTimestamp.AddDate(0, int(plan.OffsetMonths.ValueInt64()), 0)
+	if plan.OffsetHours.ValueInt64() != 0 {
+		hours := time.Duration(plan.OffsetHours.ValueInt64()) * time.Hour
+		offsetTimestamp = offsetTimestamp.Add(hours)
 	}
 
-	if plan.OffsetSeconds.ValueInt64() != 0 {
-		seconds := time.Duration(plan.OffsetSeconds.ValueInt64()) * time.Second
-		offsetTimestamp = offsetTimestamp.Add(seconds)
+	if plan.OffsetDays.ValueInt64() != 0 {
+		offsetTimestamp = offsetTimestamp.AddDate(0, 0, int(plan.OffsetDays.ValueInt64()))
+	}
+
+	if plan.OffsetWeeks.ValueInt64() != 0 {
+		offsetTimestamp = offsetTimestamp.AddDate(0, 0, 7*int(plan.OffsetWeeks.ValueInt64()))
+	}
+
+	if plan.OffsetMonths.ValueInt64() != 0 {
+		offsetTimestamp = offsetTimestamp.AddDate(0, int(plan.OffsetMonths.ValueInt64()), 0)
 	}
 
 	if plan.OffsetYears.ValueInt64() != 0 {
 		offsetTimestamp = offsetTimestamp.AddDate(int(plan.OffsetYears.ValueInt64()), 0, 0)
 	}
 
+	weekOfYear, week := offsetTimestamp.ISOWeek()
+
 	plan.BaseRFC3339 = timetypes.NewRFC3339TimeValue(timestamp)
 	plan.Year = types.Int64Value(int64(offsetTimestamp.Year()))
 	plan.Month = types.Int64Value(int64(offsetTimestamp.Month()))
+	plan.Week = types.Int64Value(int64(week))
+	plan.WeekOfYear = types.Int64Value(int64(weekOfYear))
 	plan.Day = types.Int64Value(int64(offsetTimestamp.Day()))
 	plan.Hour = types.Int64Value(int64(offsetTimestamp.Hour()))
 	plan.Minute = types.Int64Value(int64(offsetTimestamp.Minute()))

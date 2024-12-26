@@ -16,6 +16,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
+// TODO :: Bhargav :: Add tests for week, week_of_year and offset_week related changes
+
 func TestAccTimeOffset_Triggers(t *testing.T) {
 	resourceName := "time_offset.test"
 
@@ -492,12 +494,13 @@ func testAccTimeOffsetImportStateIdFunc() resource.ImportStateIdFunc {
 
 		offsetYears := rs.Primary.Attributes["offset_years"]
 		offsetMonths := rs.Primary.Attributes["offset_months"]
+		offsetWeeks := rs.Primary.Attributes["offset_weeks"]
 		offsetDays := rs.Primary.Attributes["offset_days"]
 		offsetHours := rs.Primary.Attributes["offset_hours"]
 		offsetMinutes := rs.Primary.Attributes["offset_minutes"]
 		offsetSeconds := rs.Primary.Attributes["offset_seconds"]
 
-		return fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s", rs.Primary.ID, offsetYears, offsetMonths, offsetDays, offsetHours, offsetMinutes, offsetSeconds), nil
+		return fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s", rs.Primary.ID, offsetYears, offsetMonths, offsetWeeks, offsetDays, offsetHours, offsetMinutes, offsetSeconds), nil
 	}
 }
 

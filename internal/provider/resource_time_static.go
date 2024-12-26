@@ -91,8 +91,12 @@ func (t *timeStaticResource) ModifyPlan(ctx context.Context, req resource.Modify
 		return
 	}
 
+	weekOfYear, week := rfc3339.ISOWeek()
+
 	plan.Year = types.Int64Value(int64(rfc3339.Year()))
 	plan.Month = types.Int64Value(int64(rfc3339.Month()))
+	plan.Week = types.Int64Value(int64(week))
+	plan.WeekOfYear = types.Int64Value(int64(weekOfYear))
 	plan.Day = types.Int64Value(int64(rfc3339.Day()))
 	plan.Hour = types.Int64Value(int64(rfc3339.Hour()))
 	plan.Minute = types.Int64Value(int64(rfc3339.Minute()))
@@ -136,6 +140,14 @@ func (t *timeStaticResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"month": schema.Int64Attribute{
 				Description: "Number month of timestamp.",
+				Computed:    true,
+			},
+			"week": schema.Int64Attribute{
+				Description: "Number week of timestamp.",
+				Computed:    true,
+			},
+			"week_of_year": schema.Int64Attribute{
+				Description: "Number year (w.r.t week number) of offset timestamp.",
 				Computed:    true,
 			},
 			"rfc3339": schema.StringAttribute{
@@ -185,16 +197,20 @@ func (t *timeStaticResource) ImportState(ctx context.Context, req resource.Impor
 		return
 	}
 
+	weekOfYear, week := timestamp.ISOWeek()
+
 	state := timeStaticModelV0{
-		Year:    types.Int64Value(int64(timestamp.Year())),
-		Month:   types.Int64Value(int64(timestamp.Month())),
-		Day:     types.Int64Value(int64(timestamp.Day())),
-		Hour:    types.Int64Value(int64(timestamp.Hour())),
-		Minute:  types.Int64Value(int64(timestamp.Minute())),
-		Second:  types.Int64Value(int64(timestamp.Second())),
-		RFC3339: timetypes.NewRFC3339TimeValue(timestamp),
-		Unix:    types.Int64Value(timestamp.Unix()),
-		ID:      timetypes.NewRFC3339TimeValue(timestamp),
+		Year:       types.Int64Value(int64(timestamp.Year())),
+		Month:      types.Int64Value(int64(timestamp.Month())),
+		Week:       types.Int64Value(int64(week)),
+		WeekOfYear: types.Int64Value(int64(weekOfYear)),
+		Day:        types.Int64Value(int64(timestamp.Day())),
+		Hour:       types.Int64Value(int64(timestamp.Hour())),
+		Minute:     types.Int64Value(int64(timestamp.Minute())),
+		Second:     types.Int64Value(int64(timestamp.Second())),
+		RFC3339:    timetypes.NewRFC3339TimeValue(timestamp),
+		Unix:       types.Int64Value(timestamp.Unix()),
+		ID:         timetypes.NewRFC3339TimeValue(timestamp),
 	}
 	state.Triggers = types.MapValueMust(types.StringType, map[string]attr.Value{})
 
@@ -225,17 +241,21 @@ func (t *timeStaticResource) Create(ctx context.Context, req resource.CreateRequ
 		timestamp = rfc3339
 	}
 
+	weekOfYear, week := timestamp.ISOWeek()
+
 	state := timeStaticModelV0{
-		Triggers: plan.Triggers,
-		Year:     types.Int64Value(int64(timestamp.Year())),
-		Month:    types.Int64Value(int64(timestamp.Month())),
-		Day:      types.Int64Value(int64(timestamp.Day())),
-		Hour:     types.Int64Value(int64(timestamp.Hour())),
-		Minute:   types.Int64Value(int64(timestamp.Minute())),
-		Second:   types.Int64Value(int64(timestamp.Second())),
-		RFC3339:  timetypes.NewRFC3339TimeValue(timestamp),
-		Unix:     types.Int64Value(timestamp.Unix()),
-		ID:       timetypes.NewRFC3339TimeValue(timestamp),
+		Triggers:   plan.Triggers,
+		Year:       types.Int64Value(int64(timestamp.Year())),
+		Month:      types.Int64Value(int64(timestamp.Month())),
+		Week:       types.Int64Value(int64(week)),
+		WeekOfYear: types.Int64Value(int64(weekOfYear)),
+		Day:        types.Int64Value(int64(timestamp.Day())),
+		Hour:       types.Int64Value(int64(timestamp.Hour())),
+		Minute:     types.Int64Value(int64(timestamp.Minute())),
+		Second:     types.Int64Value(int64(timestamp.Second())),
+		RFC3339:    timetypes.NewRFC3339TimeValue(timestamp),
+		Unix:       types.Int64Value(timestamp.Unix()),
+		ID:         timetypes.NewRFC3339TimeValue(timestamp),
 	}
 
 	diags = resp.State.Set(ctx, state)
@@ -261,14 +281,16 @@ func (t *timeStaticResource) Delete(ctx context.Context, req resource.DeleteRequ
 }
 
 type timeStaticModelV0 struct {
-	Day      types.Int64       `tfsdk:"day"`
-	Hour     types.Int64       `tfsdk:"hour"`
-	Triggers types.Map         `tfsdk:"triggers"`
-	Minute   types.Int64       `tfsdk:"minute"`
-	Month    types.Int64       `tfsdk:"month"`
-	RFC3339  timetypes.RFC3339 `tfsdk:"rfc3339"`
-	Second   types.Int64       `tfsdk:"second"`
-	Unix     types.Int64       `tfsdk:"unix"`
-	Year     types.Int64       `tfsdk:"year"`
-	ID       timetypes.RFC3339 `tfsdk:"id"`
+	Day        types.Int64       `tfsdk:"day"`
+	Hour       types.Int64       `tfsdk:"hour"`
+	Triggers   types.Map         `tfsdk:"triggers"`
+	Minute     types.Int64       `tfsdk:"minute"`
+	Month      types.Int64       `tfsdk:"month"`
+	Week       types.Int64       `tfsdk:"week"`
+	WeekOfYear types.Int64       `tfsdk:"week_of_year"`
+	RFC3339    timetypes.RFC3339 `tfsdk:"rfc3339"`
+	Second     types.Int64       `tfsdk:"second"`
+	Unix       types.Int64       `tfsdk:"unix"`
+	Year       types.Int64       `tfsdk:"year"`
+	ID         timetypes.RFC3339 `tfsdk:"id"`
 }

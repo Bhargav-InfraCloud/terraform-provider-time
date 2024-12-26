@@ -19,6 +19,8 @@ import (
 	"github.com/hashicorp/terraform-provider-time/internal/timetesting"
 )
 
+// TODO :: Bhargav :: Add tests for week and week_of_year related changes
+
 func TestAccTimeStatic_basic(t *testing.T) {
 	resourceName := "time_static.test"
 
